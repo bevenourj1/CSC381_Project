@@ -81,9 +81,7 @@ class CSVReader(tk.Frame):
                 self.tree.heading("#" + str(colindex + 1), text=col, command=expand)   
             for row in data_Normalized:
                 self.tree.insert("", "end", values=row)
-            for var in col_io:
-                print(var)
-                print(len(col_io))
+
 
         def expand():
             newRoot = tk.Tk()
@@ -118,6 +116,7 @@ class CSVReader(tk.Frame):
             if oldList == True:
                     colchoices = []
                     col_io_choices = []
+
             while i < len(colnames):
 
                 OPTIONS = props
@@ -212,11 +211,14 @@ class CSVReader(tk.Frame):
 
         def delete_command():
             global colprops
+            global oldList
             global col_io
+            global colnames
+            colnames = []
             for col in self.tree['columns']:
                 self.tree.heading(col, text='')
             self.tree.delete(*self.tree.get_children())
-
+            oldList = False
             colprops = {}
             col_io = {}
 
