@@ -43,7 +43,7 @@ class CSVReader(tk.Frame):
         def reset():
             self.tree.delete(*self.tree.get_children())
             for colindex, col in enumerate(colnames):
-                self.tree.heading("#" + str(colindex + 1), text=col)   
+                self.tree.heading("#" + str(colindex + 1), text=str(colindex) + str('. ') + col)   
             for row in data:
                 if row == colnames:
                     pass
@@ -255,7 +255,7 @@ class CSVReader(tk.Frame):
                         col_outputs = {colname: [] for colname in colnames}
 
                     for colindex, col in enumerate(colnames):
-                        self.tree.heading("#" + str(colindex + 1), text=col)   
+                        self.tree.heading("#" + str(colindex + 1), text=str(colindex) + str('. ') + col)  
 
 
                     for row in csv_reader:
