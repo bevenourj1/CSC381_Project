@@ -8,6 +8,7 @@ import csv
 import copy
 import statistics
 import matplotlib.pyplot as plt
+import re
 
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
@@ -429,17 +430,12 @@ class CSVReader(tk.Frame):
         self.scrollbar.pack(side="right", fill="y")
         self.scrollbar2.pack(side="bottom", fill="x")
 
-def topN(norm_type, row):
-
-
-    pass
-
 def norm_error():
     try:
         NormalizationWindow(data)
     except NameError:
         messagebox.showerror(" No File ", " Please select a CSV file first ")
-
+    
 def NormalizeData(pin, norm_type, data, norm_tree):  
 
     # Create copy of the CSV file
@@ -534,7 +530,45 @@ def NormalizeData(pin, norm_type, data, norm_tree):
         if row == colnames:
             pass
         else:
-            norm_tree.insert("", "end", values=row)
+            norm_tree.insert("", "end", values=row)    
+
+def TopNCal(nTree, normTree, n, type):
+    nTree.delete(*nTree.get_children())
+
+    nDict = {}
+
+    for col in nTree['columns']:
+        nTree.column(col, width=10)
+        nTree.heading(col, text=col) 
+    
+    rowCheck = 0 
+    for item in normTree.get_children():
+        values = normTree.item(item,'values')
+        rowValue = 0
+
+        for item in values:
+            item = re.sub(r'\(', '', item)
+            item = re.sub(r'\)', '', item)
+
+            try:
+                rowValue += float(item)
+                finalVal = f'{rowValue:.2f}'
+            except ValueError:
+                pass
+
+        nDict[values[rowCheck]] = finalVal 
+    
+    numCheck = 0
+    for key, value in sorted(nDict.items(), key = lambda x: x[1], reverse=TRUE):
+        if numCheck >= n:
+            break
+        else:
+            numCheck += 1
+            data = ('# ' + str(numCheck), key, value)
+            nTree.insert('', 'end', values=data)
+    nTree.insert("", "end")
+    nTree.column("Place", minwidth=0, width=50, stretch=NO)
+
 
 class NormalizationWindow:
     def __init__(self, data):
@@ -554,8 +588,11 @@ class NormalizationWindow:
         self.middle_frame = tk.Frame(self.norm_root, bg='orange', pady="5", padx="5", height='10')
         self.middle_frame.pack(side=tk.TOP, fill='x', expand=False)
 
+        self.middle_frame2 = tk.Frame(self.middle_frame, bg='orange', height='10')
+        self.middle_frame2.pack(side=tk.LEFT, fill='x', expand=False)
+
         self.pin_check = tk.StringVar(self.norm_root)
-        self.pin_box = tk.Checkbutton(self.middle_frame, text="Pin Outliers", variable=self.pin_check, onvalue='(Pinned)', offvalue="",
+        self.pin_box = tk.Checkbutton(self.middle_frame2, text="Pin Outliers", variable=self.pin_check, onvalue='(Pinned)', offvalue="",
                                       command=lambda: self.header_update(""))
         self.pin_box.pack(side=tk.LEFT, padx='10')
 
@@ -563,14 +600,76 @@ class NormalizationWindow:
         self.button_dict = {}
 
         for methods in self.method_labels:
-            self.button_dict[methods] = tk.Button(self.middle_frame, text=methods, padx=10,
+            self.button_dict[methods] = tk.Button(self.middle_frame2, text=methods, padx=10,
                                                 command=lambda methods = methods: (self.norm_tree.delete(*self.norm_tree.get_children()), 
                                                 NormalizeData(self.pin_check, methods, data, self.norm_tree), 
                                                 self.header_update(methods)))
             self.button_dict[methods].pack(side=tk.LEFT, padx=10)
+        
+        self.space_label = Label(self.middle_frame2, font = ("Helvetica", 24), text="     ", background='orange')
+        self.space_label.pack(side=tk.LEFT)
+
+        self.topN_button = tk.Button(self.middle_frame2, text=" Top N ", padx='10', command = self.TopNFrame)
+        self.topN_button.pack(side=tk.LEFT, padx=5)
+
+        self.nNum = tk.IntVar(self.norm_root)
+        self.nNum.set(int(len(data)/2))
+
+        self.nField = ttk.Entry(self.middle_frame2, textvariable = self.nNum,  width=5, justify=CENTER, font=('Arial', 12))
+        self.nField.pack(side=tk.LEFT, padx=1)
+
+        self.nInc = tk.Button(self.middle_frame2, text="▲", font = ("Helvetica", 7, 'bold'), height= 1, padx=0, pady=0, command=lambda: self.nMath(0, 'plus'))
+        self.nInc.pack(side=tk.TOP)
+
+        self.nDec = tk.Button(self.middle_frame2, text="▼", font = ("Helvetica", 7, 'bold'),  height= 1, padx=0, pady=0, command=lambda: self.nMath(0, 'minus'))
+        self.nDec.pack(side=tk.BOTTOM)
+
+        self.nRadioNum = tk.StringVar(self.norm_root)
+
+        self.nR1 = tk.Radiobutton(self.middle_frame, text='All Numerics ', value = 'All Numerics', variable= self.nRadioNum, font=("Helvetica", 14))
+        self.nR1.pack(side=tk.LEFT, padx=3)
+        self.nR2 = tk.Radiobutton(self.middle_frame, text='Inputs ', value = 'Inputs', variable= self.nRadioNum,font=("Helvetica", 14))
+        self.nR2.pack(side=tk.LEFT, padx=3)
+        self.nR3 = tk.Radiobutton(self.middle_frame, text='Outputs ', value = 'Outputs', variable= self.nRadioNum,font=("Helvetica", 14))
+        self.nR3.pack(side=tk.LEFT, padx=3)
+
+        self.nRadioNum.set('All Numerics')
+
+        self.reset = tk.Button(self.middle_frame, text=" Reset ", padx=10,
+                                                command=lambda: (self.norm_tree.delete(*self.norm_tree.get_children()), 
+                                                NormalizeData('', '', data, self.norm_tree), 
+                                                self.header_update('R'), self.TopNClose()))
+        self.reset.pack(side=tk.RIGHT, padx=5)
+
+
+        self.nFrame = tk.Frame(self.norm_root, bg='sea green', padx=0, pady=10)
+
+        self.nClose = tk.Button(self.nFrame, text="X", font = ('Helvetica', 10, 'bold'), command= lambda: self.TopNClose())
+        self.nClose.pack(side=tk.RIGHT, anchor=tk.NE, padx=0)
 
         self.bottom_frame = ttk.Frame(self.norm_root)
-        self.bottom_frame.pack(expand=tk.YES, fill=tk.BOTH)
+        self.bottom_frame.pack(side = tk.RIGHT, expand=tk.TRUE, fill=tk.BOTH)
+
+        self.nHead = tk.Label(self.nFrame, text= " Top " + str(self.nNum.get()) + " for " + str(self.nRadioNum.get()),
+                                            bg="white", fg="black", font=('Helvetica', 18), pady=5, justify=tk.CENTER)
+        self.nHead.pack(side=tk.TOP, pady=5, padx=5)
+
+        self.nTreeFrame = tk.Frame(self.nFrame, padx=10, pady=10)
+        self.nTreeFrame.pack(side = tk.TOP, expand=tk.TRUE, fill=tk.BOTH, padx=5)
+
+        self.nTree = ttk.Treeview(self.nTreeFrame, columns=('Place', colnames[0], 'Score'), show='headings')
+        
+
+
+        self.nTree.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.TRUE)
+        
+        self.nScroll = ttk.Scrollbar(self.nTree, orient="vertical", command=self.nTree.yview)
+        self.nScroll2 = ttk.Scrollbar(self.nTree, orient="horizontal", command=self.nTree.xview)
+        self.nTree.configure(yscrollcommand=self.nScroll.set)
+        self.nTree.configure(xscrollcommand=self.nScroll2.set)
+
+        self.nScroll.pack(side=RIGHT, fill="y")
+        self.nScroll2.pack(side=BOTTOM, fill="x")
 
         self.norm_tree = ttk.Treeview(self.bottom_frame, columns=colnames, show='headings')
 
@@ -578,11 +677,12 @@ class NormalizationWindow:
         self.scrollbar2 = ttk.Scrollbar(self.norm_tree, orient="horizontal", command=self.norm_tree.xview)
         self.norm_tree.configure(yscrollcommand=self.scrollbar.set)
         self.norm_tree.configure(xscrollcommand=self.scrollbar2.set)
-        self.norm_tree.bind("<Double-1>", self.OnDoubleClick)
 
         self.norm_tree.pack(side="bottom", fill="both", expand=True)
         self.scrollbar.pack(side="right", fill="y")
         self.scrollbar2.pack(side="bottom", fill="x")
+
+        self.norm_tree.bind("<Double-1>", self.OnDoubleClick)
 
         for colindex, col in enumerate(colnames):
             self.norm_tree.heading("#" + str(colindex + 1), text=col)
@@ -593,6 +693,19 @@ class NormalizationWindow:
                 self.norm_tree.insert("", "end", values=row)
         
         self.norm_root.mainloop()
+
+    def TopNFrame(self): 
+
+        if self.nMath(1, ''):
+            TopNCal(self.nTree, self.norm_tree, self.nNum.get(), "")
+            
+            
+            self.nHead.config(text= " Top " + str(self.nNum.get()) + " for " + str(self.nRadioNum.get()),
+                                bg="white", fg="black", font=('Helvetica', 18), pady=5, justify=tk.CENTER, width=25)
+            self.nFrame.pack(side = tk.LEFT, expand=tk.FALSE, fill=tk.Y)
+
+    def TopNClose(self):
+        self.nFrame.forget()
 
     def OnDoubleClick(self, event):
         item = self.norm_tree.selection()
@@ -605,8 +718,32 @@ class NormalizationWindow:
     def header_update(self, norm_type):
         if norm_type == '':
             return
-        self.header_label.config(text=" Normalized Values: " + norm_type + " " + str(self.pin_check.get()))
-  
+        elif norm_type == 'R':
+            self.header_label.config(text=" Normalized Values: Select a Method")
+        else:
+            self.header_label.config(text=" Normalized Values: " + norm_type + " " + str(self.pin_check.get()))
+
+    def nMath(self, x, math):
+        try:
+            self.nNum.get()
+        except TclError:
+            messagebox.showerror(" Invaild Entry ", " The value of N must be a number ", parent = self.norm_root)
+            return 0
+
+        if self.nNum.get() > len(data) - 1 or self.nNum.get() < 1:
+            messagebox.showerror(" Value out of Range ", " The value of N must be between 1 and " + str(len(data) - 1) + " ", parent = self.norm_root)
+
+            return 0
+        else:
+            if x == 0 and math == 'plus':
+                self.nNum.set(self.nNum.get() + 1)
+            elif x == 0 and math == 'minus':
+                self.nNum.set(self.nNum.get() - 1)
+            else:
+                return 1
+
+
+        
 if __name__ == "__main__":
     root=tk.Tk()
     root.geometry("1500x500")
