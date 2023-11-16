@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import filedialog
+from tkinter import messagebox
 from tkinter import ttk
 from tkinter import *
 import os
@@ -8,6 +9,9 @@ import copy
 import statistics
 import types
 import re
+import matplotlib.pyplot as plt
+import numpy as np
+
 from itertools import chain
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
@@ -43,74 +47,25 @@ class CSVReader(tk.Frame):
         similar_choice = tk.StringVar(self)
         similarspecify_choice = tk.StringVar(self)
 
-        def NormalizeData(pin):
 
 
-            type = normal_opts.get()
 
 
-            # Create copy of the CSV file
-            data_Normalized = copy.deepcopy(data)
-
-            for x in range(len(data[1])):
-                row_count = 1
-
-            #region Details/Examples
-            # This is used to check if the item in the column is numeric
-            # It looks at the sting value stored there at checks the last character in the string
-            # Example: 1.234 | Checks '4' and then assumes the column is numeric
-            # Example: Arizona Cardinals | Checks 's' and then assumes the column is non-numeric
-            #endregion
-                size = len(data[1][x])
-                if data[1][x][size - 1].isdigit():
-
-                #region Loop/Math
-                # List is created that holds all the data in the column
-                # Removes the first index since that is the headers
-                # Converts list into integers before sorting
-                # Loops while there is still a row in data and fills it in with Normalized Data
-                # Breaks when it is at the final row of the CSV file
-                # endregion 
-                    temp_col = [sub[x] for sub in data]
-                    temp_col.pop(0)
-                    temp_col = list(map(float, temp_col))
-                    temp_col.sort()
-
-                    stdv_temp_col = statistics.stdev(temp_col)
-
-                    if pin != "pin":
-                        while row_count != len(data):
-                            if type == "0,1":
-                                data_Normalized[row_count][x] = f'{(float(data[row_count][x]) - min(temp_col)) / (max(temp_col) - min(temp_col)):.4f}'
-                            elif type == "1,10":
-                                data_Normalized[row_count][x] = f'{1 + (float(data[row_count][x]) - min(temp_col)) / (max(temp_col) - min(temp_col)) * 9:.4f}'
-                            elif type == "0,10":
-                                data_Normalized[row_count][x] = f'{(float(data[row_count][x]) - min(temp_col)) / (max(temp_col) - min(temp_col)) * 10:.4f}'
-                            elif type == "-1,1":
-                                data_Normalized[row_count][x] = f'{(float(data[row_count][x]) - min(temp_col)) / (max(temp_col) - min(temp_col)) * 2 - 1:.4f}'
-                            elif type == "Z-Scores":
-                                data_Normalized[row_count][x] = f'{(float(data[row_count][x]) - statistics.mean(temp_col)) / (stdv_temp_col):.4f}'
-                            else:
-                                pass
-                            row_count += 1
-                    else:
-                        pass
-
-            norm_delete_command()
-            data_Normalized.pop(0)
-
-            for colindex, col in enumerate(colnames):
-                self.tree.heading("#" + str(colindex + 1), text=col, command=expand)   
-            for row in data_Normalized:
-                self.tree.insert("", "end", values=row)
-
-
-        def expand():
-            newRoot = tk.Tk()
-
+        def sort_column(col_index, reverse):
+                    data = [(float(self.tree.set(child, col_index)), child) for child in self.tree.get_children('')]
+                    data.sort(reverse=reverse)
+                    for i, item in enumerate(data):
+                        self.tree.move(item[1], '', i)
+                    self.tree.heading(col_index, command=lambda: sort_column(col_index, not reverse))
         def reset():
-            normal_opts.set("----")
-            NormalizeData("")
+            self.tree.delete(*self.tree.get_children()) 
+            for colindex, col in enumerate(colnames):
+                self.tree.heading("#" + str(colindex + 1), text=str(colindex) + str('. ') + col)   
+            for row in data:
+                if row == colnames:
+                    pass
+                else:
+                    self.tree.insert("", "end", values=row)
         
         def ColumnOpts():
             global colprops
@@ -359,10 +314,91 @@ class CSVReader(tk.Frame):
                 #print(standard_data)
                 set_desc_compare()
 
-        def norm_delete_command():
-            for col in self.tree['columns']:
-                self.tree.heading(col, text='')
-            self.tree.delete(*self.tree.get_children())
+                # Sort Window
+        def open_sort_window():
+            sort_window = tk.Tk()
+            sort_window.title("Sort Options")
+
+            def set_col_num():
+                global col_num
+                col_num = int(entry.get())
+
+            label = tk.Label(sort_window, text="Enter the column number to sort:")
+            label.pack()
+
+            # Column number input
+            entry = tk.Entry(sort_window)
+            entry.pack()
+
+            # the "Descending" button
+            sort_desc_button = tk.Button(sort_window, text="Descending", command=lambda: (set_col_num(), sort_column(colnames[col_num], True)))
+            sort_desc_button.pack(side=tk.BOTTOM)
+
+            # the "Ascending" button
+            sort_button = tk.Button(sort_window, text="Ascending", command=lambda: (set_col_num(), sort_column(colnames[col_num], False)))
+            sort_button.pack(side=tk.BOTTOM)
+
+            sort_window.mainloop()
+
+        # Scatter PLot Window
+        def scatter_plot_window():
+            sp_window = tk.Tk()
+            sp_window.title("Scatter Plot")
+            sp_window.geometry("360x100")
+
+            # Set columns 1 & 2 for the scatter plot
+            def set_scatter_plot():
+                global col1, col2
+                col1_input = entry1.get()
+                col2_input = entry2.get()
+
+                # Validate the user input
+                if not col1_input.isdigit() or not col2_input.isdigit():
+                    messagebox.showerror("Error", "Please enter valid column numbers as integers.")
+                    return
+
+                col1 = int(col1_input)
+                col2 = int(col2_input)
+
+                # Check if the column numbers are within the valid range
+                if col1 < 0 or col1 >= len(colnames) or col2 < 0 or col2 >= len(colnames):
+                    messagebox.showerror("Error", "Column numbers are out of range.")
+                    return
+                
+                scatter_plot()
+
+            label = tk.Label(sp_window, text="Enter the column numbers:")
+            label.pack()
+
+            entry1 = tk.Entry(sp_window)
+            entry1.pack(side=tk.LEFT)
+            
+            entry2 = tk.Entry(sp_window)
+            entry2.pack(side=tk.RIGHT)
+
+            create_sp_button = tk.Button(sp_window, text="Create Scatter Plot", command=set_scatter_plot)
+            create_sp_button.pack(side=tk.BOTTOM)
+
+        # Create the Scatter Plot
+        def scatter_plot():
+            if col1 is not None and col2 is not None:
+                x = []
+                y = []
+                for row in data[1:]:
+                    try:
+                        x_value = float(row[col1])
+                        y_value = float(row[col2])
+                        x.append(x_value)
+                        y.append(y_value)
+                    except ValueError:
+                        pass
+
+                plt.figure()
+                plt.scatter(x, y, marker='o', alpha=0.5)
+                plt.xlabel(colnames[col1])
+                plt.ylabel(colnames[col2])
+                plt.title(f"Scatter Plot: {colnames[col1]} vs {colnames[col2]}")
+                plt.show()
 
         def delete_command():
             global colprops
@@ -545,22 +581,24 @@ class CSVReader(tk.Frame):
         self.middleFrame.pack()
         self.middleFrame.pack_propagate(0)
 
+        button_width = 20
+
         self.button = tk.Button(self.middleFrame, text='Open', padx= '15', command=UploadAction)
         self.button.pack()
 
         resetButton = tk.Button(self.middleFrame, text="Reset", padx= '20', command=reset, fg='red')
         resetButton.pack(side=tk.BOTTOM)
 
-        normal_opts = tk.StringVar()
-        normal_opts.set("----")
-        nor_drop = tk.OptionMenu(self.middleFrame, normal_opts, *select_nor)   
-        nor_drop.pack(side=tk.BOTTOM, padx= '20')
+        # Create the "Scatter Plot" button
+        sp_button = tk.Button(self.middleFrame, text="Scatter Plot", width=button_width, command=scatter_plot_window)
+        sp_button.pack(side=tk.BOTTOM)
 
-        normalButton_pin = tk.Button(self.middleFrame, text="Normalize & Pin Outliers", padx= '15', command=lambda: NormalizeData("pin"))
+        normalButton_pin = tk.Button(self.middleFrame, text=" Normalize Data ", width= 20, command=lambda: norm_error())
         normalButton_pin.pack(side=tk.BOTTOM)
 
-        normalButton = tk.Button(self.middleFrame, text="Normalize", padx= '20', command=lambda: NormalizeData(""))
-        normalButton.pack(side=tk.BOTTOM)
+        # Create the "Sort" button
+        sort_button = tk.Button(self.middleFrame, text="Sort", width=button_width, command=open_sort_window)
+        sort_button.pack(side=tk.BOTTOM)
 
         self.dropFrame = tk.Frame(self, bg="white", pady="10", padx="10", 
                              width = "200", height="50")
@@ -595,7 +633,441 @@ class CSVReader(tk.Frame):
         self.scrollbar.pack(side="right", fill="y")
         self.scrollbar2.pack(side="bottom", fill="x")
 
+def norm_error():
+    try:
+        NormalizationWindow(data)
+    except NameError:
+        messagebox.showerror(" No File ", " Please select a CSV file first ")
+    
+def NormalizeData(pin, norm_type, data, norm_tree):  
 
+    # Create copy of the CSV file
+    data_Normalized = copy.deepcopy(data)
+
+    for x in range(len(data[1])):
+        row_count = 1
+
+    #region Details/Examples
+    # This is used to check if the item in the column is numeric
+    # It looks at the sting value stored there at checks the last character in the string
+    # Example: 1.234 | Checks '4' and then assumes the column is numeric
+    # Example: Arizona Cardinals | Checks 's' and then assumes the column is non-numeric
+    #endregion
+        size = len(data[1][x])
+        if data[1][x][size - 1].isdigit():
+
+        #region Loop/Math
+        # List is created that holds all the data in the column
+        # Removes the first index since that is the headers
+        # Converts list into integers before sorting
+        # Loops while there is still a row in data and fills it in with Normalized Data
+        # Breaks when it is at the final row of the CSV file
+        # endregion 
+            temp_col = [sub[x] for sub in data]
+            temp_col.pop(0)
+            temp_col = list(map(float, temp_col))
+            temp_col.sort()
+
+            stdv_temp_col = statistics.stdev(temp_col)
+            mean_temp_col = statistics.mean(temp_col)
+
+            while row_count != len(data):
+
+                if norm_type == " 0, 1 ":
+                    if pin.get() == "(Pinned)" and float(data[row_count][x]) > (stdv_temp_col * 3 + mean_temp_col):
+                        data_Normalized[row_count][x] = '(1)'
+                    elif pin.get() == "(Pinned)" and float(data[row_count][x]) < (mean_temp_col - (stdv_temp_col * 3)):
+                        data_Normalized[row_count][x] = '(0)'
+                    else:
+                        data_Normalized[row_count][x] = f'{(float(data[row_count][x]) - min(temp_col)) / (max(temp_col) - min(temp_col)):.4f}'
+
+                elif norm_type == " 1, 10 ":
+                    if pin.get() == "(Pinned)" and float(data[row_count][x]) > ((stdv_temp_col * 3) + mean_temp_col):
+                        data_Normalized[row_count][x] = '(10)'
+
+                        print("\nRow: " + str(data[row_count][0]) + " | Column: " + str(data[0][x] + " was pinned(H)!"))
+                        print("The Value was: " + str(data[row_count][x]))
+                        print("The Mean plus the Dev * 3 was: " + str((mean_temp_col + (stdv_temp_col * 3))))
+                        
+
+                    elif pin.get() == "(Pinned)" and float(data[row_count][x]) < (mean_temp_col - (stdv_temp_col * 3)):
+                        data_Normalized[row_count][x] = '(1)'
+
+                        print("\nRow: " + str(data[row_count][x]) + " | Column: " + str(data[0][x] + " was pinned(L)!"))
+                        print("The Mean minus the Dev * 3 was: " + str((mean_temp_col - (stdv_temp_col * 3))))
+                        print("The Value was: " + str(data[row_count][x]))
+
+                    else:
+                        data_Normalized[row_count][x] = f'{1 + (float(data[row_count][x]) - min(temp_col)) / (max(temp_col) - min(temp_col)) * 9:.4f}'
+
+                elif norm_type == " 0, 10 ":
+                    if pin.get() == "(Pinned)" and float(data[row_count][x]) > ((stdv_temp_col * 3) + mean_temp_col):
+                        data_Normalized[row_count][x] = '(10)'
+                    elif pin.get() == "(Pinned)" and float(data[row_count][x]) < (mean_temp_col - (stdv_temp_col * 3)):
+                        data_Normalized[row_count][x] = '(0)'
+                    else:
+                        data_Normalized[row_count][x] = f'{(float(data[row_count][x]) - min(temp_col)) / (max(temp_col) - min(temp_col)) * 10:.4f}'
+
+                elif norm_type == " -1, 1 ":
+                    if pin.get() == "(Pinned)" and float(data[row_count][x]) > ((stdv_temp_col * 3) + mean_temp_col):
+                        data_Normalized[row_count][x] = '(1)'
+                    elif pin.get() == "(Pinned)" and float(data[row_count][x]) < (mean_temp_col - (stdv_temp_col * 3)):
+                        data_Normalized[row_count][x] = '(-1)'
+                    else:
+                        data_Normalized[row_count][x] = f'{(float(data[row_count][x]) - min(temp_col)) / (max(temp_col) - min(temp_col)) * 2 - 1:.4f}'
+
+                elif norm_type == " Z-Scores ":
+                    if pin.get() == "(Pinned)":
+                        pin.set('')
+                        data_Normalized[row_count][x] = f'{(float(data[row_count][x]) - (mean_temp_col)) / (stdv_temp_col):.4f}'
+                    else:
+                        data_Normalized[row_count][x] = f'{(float(data[row_count][x]) - (mean_temp_col)) / (stdv_temp_col):.4f}'
+                else:
+                    pass
+
+                row_count += 1
+
+    for colindex, col in enumerate(colnames):
+        norm_tree.heading("#" + str(colindex + 1), text=col)   
+    for row in data_Normalized:
+        if row == colnames:
+            pass
+        else:
+            norm_tree.insert("", "end", values=row)
+
+def Correlation(colOne, colTwo, cTree):
+
+    cTree.config(columns=(colOne, colTwo))
+    cTree.delete(*cTree.get_children())
+
+
+    for col in cTree['columns']:
+        cTree.column(col, width=10)
+        cTree.heading(col, text=col) 
+
+    colListOne = []
+    colListTwo = []
+    for row in data:
+        for x, value in enumerate(row):
+            if value == colOne:
+                colListOne = [row[x] for row in data]
+            elif value == colTwo:
+                colListTwo = [row[x] for row in data]
+    colListOne.pop(0)
+    colListTwo.pop(0)
+    try:
+        colListOne = [float(x) for x in colListOne]
+    except ValueError:
+        return 1
+    
+    try:
+        colListTwo = [float(x) for x in colListTwo]
+    except ValueError:
+        return 2
+    
+    print(colListOne)
+    print(colListTwo)
+    for i in range(len(np.corrcoef(colListOne, colListTwo))):
+        cTree.insert('', i, values = list(np.corrcoef(colListOne, colListTwo)[i]))
+
+    print(np.corrcoef(colListOne, colListTwo))
+    return np.corrcoef(colListOne, colListTwo)[0,1]
+    
+
+
+
+
+def TopNCal(nTree, normTree, n, type):
+
+    nTree.delete(*nTree.get_children())
+
+    nDict = {}
+    
+    for col in nTree['columns']:
+        nTree.column(col, width=10)
+        nTree.heading(col, text=col) 
+
+
+    finalVal = 0
+    valBreak = True
+    for row in normTree.get_children():
+        values = normTree.item(row,'values')
+        rowValue = 0
+        for col, item in zip(normTree['columns'], values):
+            if col_inputs.get(col) == [] and type == 'Inputs':
+                continue
+            elif col_outputs.get(col) == [] and type == 'Outputs':
+                continue
+            
+            valBreak = False
+            item = re.sub(r'\(', '', item)
+            item = re.sub(r'\)', '', item)
+
+            try:
+                rowValue += float(item)
+                finalVal = f'{rowValue:.2f}'
+            except ValueError:
+                pass
+        nDict[values[0]] = float(finalVal)
+
+
+    numCheck = 0
+    for key, value in sorted(nDict.items(), key = lambda x: x[1], reverse=TRUE):
+        if valBreak:
+            return 0
+        if numCheck >= n:
+            break
+        else:
+            numCheck += 1
+            data = ('# ' + str(numCheck), key, value)
+            nTree.insert('', 'end', values=data)
+    nTree.insert("", "end")
+    nTree.column("Place", minwidth=0, width=50, stretch=NO)
+    return 1
+
+
+
+class NormalizationWindow:
+    def __init__(self, data):
+        self.norm_root = tk.Tk()
+        self.norm_root.geometry("1750x750")
+        self.norm_root.title("Normalize Data")
+
+        self.top_frame = tk.Frame(self.norm_root, bg='LightBlue', pady="10", padx="10", height='50')
+        self.top_frame.pack(side=tk.TOP, fill='x', expand=False)
+
+        self.header_label = tk.Label(self.top_frame, text=" Normalized Values: Select a Method",
+                                     bg="white", fg="black", font=('Helvetica', 20))
+        self.header_label.pack(fill=tk.X)
+
+        self.top_frame.pack_propagate(0)
+
+        self.middle_frame = tk.Frame(self.norm_root, bg='orange', pady="5", padx="5", height='10')
+        self.middle_frame.pack(side=tk.TOP, fill='x', expand=False)
+
+        self.middle_frame2 = tk.Frame(self.middle_frame, bg='orange', height='10')
+        self.middle_frame2.pack(side=tk.LEFT, fill='x', expand=False)
+
+        self.pin_check = tk.StringVar(self.norm_root)
+        self.pin_box = tk.Checkbutton(self.middle_frame2, text="Pin Outliers", variable=self.pin_check, onvalue='(Pinned)', offvalue="",
+                                      command=lambda: self.header_update(""))
+        self.pin_box.pack(side=tk.LEFT, padx='10')
+
+        self.method_labels = [" -1, 1 ", " 0, 1 ", " 0, 10 ", " 1, 10 ", " Z-Scores "]
+        self.button_dict = {}
+
+        for methods in self.method_labels:
+            self.button_dict[methods] = tk.Button(self.middle_frame2, text=methods, padx=10,
+                                                command=lambda methods = methods: (self.norm_tree.delete(*self.norm_tree.get_children()), 
+                                                NormalizeData(self.pin_check, methods, data, self.norm_tree), 
+                                                self.header_update(methods)))
+            self.button_dict[methods].pack(side=tk.LEFT, padx=10)
+        
+        self.space_label = Label(self.middle_frame2, font = ("Helvetica", 24), text="     ", background='orange')
+        self.space_label.pack(side=tk.LEFT)
+
+        self.topN_button = tk.Button(self.middle_frame2, text=" Top N ", padx='10', command = self.TopNFrame)
+        self.topN_button.pack(side=tk.LEFT, padx=5)
+
+        self.nNum = tk.IntVar(self.norm_root)
+        self.nNum.set(int(len(data)/2))
+
+        self.nField = ttk.Entry(self.middle_frame2, textvariable = self.nNum,  width=5, justify=CENTER, font=('Arial', 12))
+        self.nField.pack(side=tk.LEFT, padx=1)
+
+        self.nInc = tk.Button(self.middle_frame2, text="▲", font = ("Helvetica", 7, 'bold'), height= 1, padx=0, pady=0, command=lambda: self.nMath(0, 'plus'))
+        self.nInc.pack(side=tk.TOP)
+
+        self.nDec = tk.Button(self.middle_frame2, text="▼", font = ("Helvetica", 7, 'bold'),  height= 1, padx=0, pady=0, command=lambda: self.nMath(0, 'minus'))
+        self.nDec.pack(side=tk.BOTTOM)
+
+        self.nRadioNum = tk.StringVar(self.norm_root)
+
+        self.nR1 = tk.Radiobutton(self.middle_frame, text='All Numerics ', value = 'All Numerics', variable= self.nRadioNum, font=("Helvetica", 14))
+        self.nR1.pack(side=tk.LEFT, padx=3)
+        self.nR2 = tk.Radiobutton(self.middle_frame, text='Inputs ', value = 'Inputs', variable= self.nRadioNum,font=("Helvetica", 14))
+        self.nR2.pack(side=tk.LEFT, padx=3)
+        self.nR3 = tk.Radiobutton(self.middle_frame, text='Outputs ', value = 'Outputs', variable= self.nRadioNum,font=("Helvetica", 14))
+        self.nR3.pack(side=tk.LEFT, padx=3)
+
+        self.nRadioNum.set('All Numerics')
+
+        self.reset = tk.Button(self.middle_frame, text=" Reset ", padx=10,
+                                                command=lambda: (self.norm_tree.delete(*self.norm_tree.get_children()), 
+                                                NormalizeData('', '', data, self.norm_tree), 
+                                                self.header_update('R'), self.TopNClose(), self.TopCClose()))
+        self.reset.pack(side=tk.RIGHT, padx=5)
+
+        self.space_label = Label(self.middle_frame, font = ("Helvetica", 24), text="     ", background='orange')
+        self.space_label.pack(side=tk.LEFT)
+
+        self.CorButton = tk.Button(self.middle_frame, text="Show Correlations", font = ("Helvetica", 14), padx='10', command = self.TopCFrame)
+        self.CorButton.pack(side=tk.LEFT, padx=5)
+
+        self.corChoiceOne = tk.StringVar(self.norm_root)
+        self.corChoiceOne.set('----')
+        self.corOne = tk.OptionMenu(self.middle_frame, self.corChoiceOne, *colnames)
+        self.corOne.pack(side=tk.LEFT, padx=5, pady=10)
+
+        self.corChoiceTwo = tk.StringVar(self.norm_root)
+        self.corChoiceTwo.set('----')
+        self.corTwo = tk.OptionMenu(self.middle_frame, self.corChoiceTwo, *colnames)
+        self.corTwo.pack(side=tk.LEFT, padx=5, pady=10)
+
+        self.cFrame = tk.Frame(self.norm_root, bg='pink', padx=0, pady=10)
+
+
+        self.cClose = tk.Button(self.cFrame, text="X", font = ('Helvetica', 10, 'bold'), command= lambda: self.TopCClose())
+        self.cClose.pack(side=tk.RIGHT, anchor=tk.NE, padx=0)
+
+        
+
+        self.cHead = tk.Label(self.cFrame, text= " Correlations ", bg = 'white', font=('Helvetica', 18), pady=5, justify=tk.CENTER, width=25)
+        self.cHead.pack(side=tk.TOP, pady=5, padx=5)
+
+        self.cHeadChoice = tk.Label(self.cFrame, text= " ")
+        self.cHeadChoice.pack(side=tk.TOP, pady=2, padx=5)
+
+        self.cHeadChoiceTwo = tk.Label(self.cFrame, text= " ")
+        self.cHeadChoiceTwo.pack(side=tk.TOP, pady=2, padx=5)
+
+        self.corl = tk.Label(self.cFrame, text= " ")
+        self.corl.pack(side=tk.TOP, pady=2, padx=5)
+
+
+
+        self.cTreeFrame = tk.Frame(self.cFrame, padx=10, pady=10)
+        self.cTreeFrame.pack(side = tk.TOP, expand=tk.TRUE, fill=tk.BOTH, padx=5)
+
+        self.cTree = ttk.Treeview(self.cTreeFrame, show='headings')
+        self.cTree.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.TRUE)
+        
+
+
+
+
+        self.nFrame = tk.Frame(self.norm_root, bg='sea green', padx=0, pady=10)
+
+        self.nClose = tk.Button(self.nFrame, text="X", font = ('Helvetica', 10, 'bold'), command= lambda: self.TopNClose())
+        self.nClose.pack(side=tk.RIGHT, anchor=tk.NE, padx=0)
+
+
+
+
+        self.nHead = tk.Label(self.nFrame, text= " Top " + str(self.nNum.get()) + " for " + str(self.nRadioNum.get()),
+                                            bg="white", fg="black", font=('Helvetica', 18), pady=5, justify=tk.CENTER)
+        self.nHead.pack(side=tk.TOP, pady=5, padx=5)
+
+        self.nTreeFrame = tk.Frame(self.nFrame, padx=10, pady=10)
+        self.nTreeFrame.pack(side = tk.TOP, expand=tk.TRUE, fill=tk.BOTH, padx=5)
+
+        self.nTree = ttk.Treeview(self.nTreeFrame, columns=('Place', colnames[0], 'Score'), show='headings')
+        self.nTree.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.TRUE)
+        
+        self.nScroll = ttk.Scrollbar(self.nTree, orient="vertical", command=self.nTree.yview)
+        self.nScroll2 = ttk.Scrollbar(self.nTree, orient="horizontal", command=self.nTree.xview)
+        self.nTree.configure(yscrollcommand=self.nScroll.set)
+        self.nTree.configure(xscrollcommand=self.nScroll2.set)
+
+        self.nScroll.pack(side=RIGHT, fill="y")
+        self.nScroll2.pack(side=BOTTOM, fill="x")
+
+        self.norm_tree = ttk.Treeview(self.norm_root, columns=colnames, show='headings')
+
+        self.scrollbar = ttk.Scrollbar(self.norm_tree, orient="vertical", command=self.norm_tree.yview)
+        self.scrollbar2 = ttk.Scrollbar(self.norm_tree, orient="horizontal", command=self.norm_tree.xview)
+        self.norm_tree.configure(yscrollcommand=self.scrollbar.set)
+        self.norm_tree.configure(xscrollcommand=self.scrollbar2.set)
+
+        self.norm_tree.pack(side = tk.RIGHT, fill=tk.BOTH, expand=True)
+        self.scrollbar.pack(side="right", fill="y")
+        self.scrollbar2.pack(side="bottom", fill="x")
+
+        self.norm_tree.bind("<Double-1>", self.OnDoubleClick)
+
+        for colindex, col in enumerate(colnames):
+            self.norm_tree.heading("#" + str(colindex + 1), text=col)
+        for row in data:
+            if row == colnames:
+                pass
+            else:
+                self.norm_tree.insert("", "end", values=row)
+        
+        self.norm_root.mainloop()
+
+    def TopNFrame(self): 
+
+        if self.nMath(1, ''):
+            if TopNCal(self.nTree, self.norm_tree, self.nNum.get(), self.nRadioNum.get()):
+                self.nHead.config(text= " Top " + str(self.nNum.get()) + " for " + str(self.nRadioNum.get()),
+                                    bg="white", fg="black", font=('Helvetica', 18), pady=5, justify=tk.CENTER, width=25)
+                self.nFrame.pack(side = tk.LEFT, expand=tk.FALSE, fill=tk.Y)
+            else:
+                self.nFrame.forget()
+                messagebox.showwarning(" Empty Set ", " There are no " + self.nRadioNum.get() + " selected for any Numeric Columns ", parent = self.norm_root)
+
+    def TopCFrame(self): 
+        if self.corChoiceOne.get() == '----' or self.corChoiceTwo.get() == '----':
+            messagebox.showerror(" Missing Selection ", " One or more columns was not selected ", parent = self.norm_root)
+        elif self.corChoiceOne.get() == self.corChoiceTwo.get():
+            messagebox.showwarning(" Identical Columns ", " The same column cannot be selected ", parent = self.norm_root)
+        else: 
+            check = Correlation(self.corChoiceOne.get(), self.corChoiceTwo.get(), self.cTree)
+            if check == 1:
+                messagebox.showerror(" Descriptive Column ", " Column choice '" + self.corChoiceOne.get() + "' is a descriptive column", parent = self.norm_root)
+                return
+            elif check == 2:
+                messagebox.showerror(" Descriptive Column ", " Column choice '" + self.corChoiceTwo.get() + "' is a descriptive column", parent = self.norm_root)
+                return
+            self.cHeadChoice.config(text=" " + self.corChoiceOne.get() + " ", font = ('Helvetica', 14), bg = 'white')
+            self.cHeadChoiceTwo.config(text=" " + self.corChoiceTwo.get() + " ", font = ('Helvetica', 14), bg = 'white')
+            self.corl.config(text=" " + str(check) + " ", font = ('Helvetica', 16), bg = 'white', borderwidth=3, relief="solid")
+
+            self.cFrame.pack(side = tk.LEFT, expand=tk.FALSE, fill=tk.Y)
+
+    def TopCClose(self):
+        self.cFrame.forget()
+
+    def TopNClose(self):
+        self.nFrame.forget()
+
+    def OnDoubleClick(self, event):
+        item = self.norm_tree.selection()
+        if item:
+            values = self.norm_tree.item(item[0], "values")
+
+            print(values)
+
+
+    def header_update(self, norm_type):
+        if norm_type == '':
+            return
+        elif norm_type == 'R':
+            self.header_label.config(text=" Normalized Values: Select a Method")
+        else:
+            self.header_label.config(text=" Normalized Values: " + norm_type + " " + str(self.pin_check.get()))
+
+    def nMath(self, x, math):
+        try:
+            self.nNum.get()
+        except TclError:
+            messagebox.showerror(" Invaild Entry ", " The value of N must be a number ", parent = self.norm_root)
+            return 0
+
+        if self.nNum.get() > len(data) - 1 or self.nNum.get() < 1:
+            messagebox.showerror(" Value out of Range ", " The value of N must be between 1 and " + str(len(data) - 1) + " ", parent = self.norm_root)
+
+            return 0
+        else:
+            if x == 0 and math == 'plus':
+                self.nNum.set(self.nNum.get() + 1)
+            elif x == 0 and math == 'minus':
+                self.nNum.set(self.nNum.get() - 1)
+            else:
+                return 1
+
+
+        
 if __name__ == "__main__":
     root=tk.Tk()
     root.geometry("1500x500")
