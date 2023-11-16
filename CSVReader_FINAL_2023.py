@@ -856,6 +856,9 @@ class NormalizationWindow:
         self.middle_frame2 = tk.Frame(self.middle_frame, bg='orange', height='10')
         self.middle_frame2.pack(side=tk.LEFT, fill='x', expand=False)
 
+        self.middle_frame3 = tk.Frame(self.norm_root, bg='orange', height='10')
+        self.middle_frame3.pack(side=tk.TOP, fill='x', expand=False)
+
         self.pin_check = tk.StringVar(self.norm_root)
         self.pin_box = tk.Checkbutton(self.middle_frame2, text="Pin Outliers", variable=self.pin_check, onvalue='(Pinned)', offvalue="",
                                       command=lambda: self.header_update(""))
@@ -900,28 +903,26 @@ class NormalizationWindow:
 
         self.nRadioNum.set('All Numerics')
 
-        self.reset = tk.Button(self.middle_frame, text=" Reset ", padx=10,
-                                                command=lambda: (self.norm_tree.delete(*self.norm_tree.get_children()), 
-                                                NormalizeData('', '', data, self.norm_tree), 
-                                                self.header_update('R'), self.TopNClose(), self.TopCClose()))
-        self.reset.pack(side=tk.RIGHT, padx=5)
+        
 
-        self.space_label = Label(self.middle_frame, font = ("Helvetica", 24), text="     ", background='orange')
-        self.space_label.pack(side=tk.LEFT)
 
-        self.CorButton = tk.Button(self.middle_frame, text="Show Correlations", font = ("Helvetica", 14), padx='10', command = self.TopCFrame)
+        self.CorButton = tk.Button(self.middle_frame3, text="Show Correlations", font = ("Helvetica", 14), padx='10', command = self.TopCFrame)
         self.CorButton.pack(side=tk.LEFT, padx=5)
 
         self.corChoiceOne = tk.StringVar(self.norm_root)
         self.corChoiceOne.set('----')
-        self.corOne = tk.OptionMenu(self.middle_frame, self.corChoiceOne, *colnames)
+        self.corOne = tk.OptionMenu(self.middle_frame3, self.corChoiceOne, *colnames)
         self.corOne.pack(side=tk.LEFT, padx=5, pady=10)
 
         self.corChoiceTwo = tk.StringVar(self.norm_root)
         self.corChoiceTwo.set('----')
-        self.corTwo = tk.OptionMenu(self.middle_frame, self.corChoiceTwo, *colnames)
+        self.corTwo = tk.OptionMenu(self.middle_frame3, self.corChoiceTwo, *colnames)
         self.corTwo.pack(side=tk.LEFT, padx=5, pady=10)
-
+        self.reset = tk.Button(self.middle_frame3, text=" Reset All ", font = ('bold', 14), fg= 'red', padx=20,
+                                                command=lambda: (self.norm_tree.delete(*self.norm_tree.get_children()), 
+                                                NormalizeData('', '', data, self.norm_tree), 
+                                                self.header_update('R'), self.TopNClose(), self.TopCClose()))
+        self.reset.pack(side=tk.LEFT, padx=20)
         self.cFrame = tk.Frame(self.norm_root, bg='pink', padx=0, pady=10)
 
 
